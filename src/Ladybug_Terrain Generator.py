@@ -152,33 +152,6 @@ def mdPath(folder):
             directory = os.path.join(appdata[:3], "Ladybug\IMG_Google\\")
         if not os.path.exists(directory):
             os.makedirs(directory)
-    return directory
-
-def mdPath(folder):
-    # make a folder for the images
-    if folder != None:
-        directory = os.path.join(folder, "IMG_Google\\")
-        if not os.path.exists(folder):
-            try:
-                os.mkdir(directory)
-            except Exception:
-                appdata = os.getenv("APPDATA")
-                try:
-                    directory = os.path.join(appdata, "Ladybug\IMG_Google\\")
-                except:
-                    directory = os.path.join(appdata[:3], "Ladybug\IMG_Google\\")
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-                w = gh.GH_RuntimeMessageLevel.Warning
-                ghenv.Component.AddRuntimeMessage(w, "Invalid Folder, you can find images here: {}".format(directory))
-    else:
-        appdata = os.getenv("APPDATA")
-        try:
-            directory = os.path.join(appdata, "Ladybug\IMG_Google\\")
-        except:
-            directory = os.path.join(appdata[:3], "Ladybug\IMG_Google\\")
-        if not os.path.exists(directory):
-            os.makedirs(directory)
 
     return directory
 
