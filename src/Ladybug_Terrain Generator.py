@@ -4,7 +4,7 @@
 # 
 # This file is part of Ladybug.
 # 
-# Copyright (c) 2013-2018, Antonello Di Nunzio <antonellodinunzio@gmail.com> 
+# Copyright (c) 2013-2018, Antonello Di Nunzio <antonellodinunzio@gmail.com>, Mathias Sonderskov Nielsen (mapquest API idea)
 # Ladybug is free software; you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published 
 # by the Free Software Foundation; either version 3 of the License, 
@@ -22,7 +22,7 @@
 
 
 """
-This component uses Google Maps API or open-elevation to generate terrain models. It works with Rhino 6.
+This component uses Google Maps API or mapquest API to generate terrain models. It works with Rhino 6.
 -
 This component requires an internet connection and if you use Google API you need an API key from Google.
 "Activate the API and get an API key.
@@ -32,6 +32,9 @@ Click the button below to flow through a process where you will:
     2.Enable the API
     3.Get an API key"
 ref: https://developers.google.com/maps/documentation/elevation/start
+-
+If you use mapquest API you need an API key.
+Go to this website to obtain an API key of mapquest: https://developer.mapquest.com/
 _______________________________________________________________________________________________
 IMPORTANT!
 "New Pay-As-You-Go Pricing
@@ -50,7 +53,8 @@ Special thanks goes to Google Maps.
 Provided by Ladybug 0.0.66
     
     Args:
-        APIKEY_: This is necessary for API Google. Connect a panel with your API Key from Google. Remember that it is a personal key.
+        source_: Connect 0 if you want to use Google API otherwise will be used mapquest API.
+        APIKEY_: This is necessary for API Google. Connect a panel with your API Key from Google or mapquest. Remember that it is a personal key.
         _location: It accepts two type of inputs.
         a) latitude, longitude and elevation that represent WSG84 coordinates of the base point. You can achieve these type of coordinates from Google Maps or similar.
         e.g. 40.821796, 14.426439, 990
@@ -79,10 +83,15 @@ Provided by Ladybug 0.0.66
         The default value is 18.
         mapType_: Connect an integer number, from 0 to 3, which manages the formats of map.
         -
-        0 = Satellite (default)
-        1 = Roadmap, specifies a standard roadmap image
-        2 = Terrain, it shows terrain and vegetation 
-        3 = Hybrid, it specifies a hybrid of the satellite and roadmap image
+        0 = GOOGLE Satellite (default)
+        1 = GOOGLE Roadmap, specifies a standard roadmap image
+        2 = GOOGLE Terrain, it shows terrain and vegetation 
+        3 = GOOGLE Hybrid, it specifies a hybrid of the satellite and roadmap image
+        4 = MAPQUEST map
+        5 = MAPQUEST hyb
+        6 = MAPQUEST sat
+        7 = MAPQUEST light
+        8 = MAPQUEST dark
         folder_: The folder into which you would like to write the image file. This should be a complete file path to the folder.  If no folder is provided, the images will be written to C:/USERNAME/AppData/Roaming/Ladybug/IMG_Google.
         _runIt: Set to "True" to run the component and generate the 3D terrain model.
         texture_: Set to "True" to enable Google Static Maps as well. Keep in mind the daily quota of requests. Default value is False.
@@ -231,28 +240,40 @@ class GeoLib( object ):
         self.zoom = zoom
         
     def elevationAPI(self):
-        list_coordinate = [str(pt.Y) + ',' + str(pt.X) + "|" for pt in self.points]
+        if (source_ == 0 or source_ == 1):
+            list_coordinate = [str(pt.Y) + ',' + str(pt.X) + "|" for pt in self.points]
+        else:
+            list_coordinate = [str(pt.Y) + ',' + str(pt.X) + "," for pt in self.points]
+        
         flat_list_coordinate = ''.join(list_coordinate)
         flat_list_coordinate = flat_list_coordinate[:len(flat_list_coordinate)-1]
         url_part2 = flat_list_coordinate
         
         if len(url_part2) < 4094:
             try:
-                if APIKEY_:
-                    response = urllib2.urlopen('https://maps.googleapis.com/maps/api/elevation/json?locations=' + url_part2 + '&key=' + APIKEY_ )
-                    jsonData = json.loads( response.read( ) )
-                    print(jsonData)
-                    elevations = [ jsonData['results'][i]['elevation'] for i in xrange( len(jsonData['results']) ) ]
+                if (APIKEY_):
+                    if (source_ == 0):
+                        response = urllib2.urlopen('https://maps.googleapis.com/maps/api/elevation/json?locations=' + url_part2 + '&key=' + APIKEY_ )
+                        jsonData = json.loads( response.read( ) )
+                        print(jsonData)
+                        elevations = [ jsonData['results'][i]['elevation'] for i in xrange( len(jsonData['results']) ) ]
+                    else:
+                        response = urllib2.urlopen('https://open.mapquestapi.com/elevation/v1/profile?shapeFormat=raw&latLngCollection=' + url_part2 + '&key=' + APIKEY_ )
+                        jsonData = json.loads( response.read( ) )
+                        print(jsonData)
+                        elevations = [ jsonData['elevationProfile'][i]['height'] for i in xrange( len(jsonData['elevationProfile']) ) ]
                     for pt, el in zip ( self.pts, elevations ):
                         pt.Z = el / unitConversionFactor
                         pt.X = pt.X / unitConversionFactor
                         pt.Y = pt.Y / unitConversionFactor
                         self.pointsZ.append( pt )
+                        
                 else:
                     warning = 'Please connect an API key.'
                     ghenv.Component.AddRuntimeMessage(gh.GH_RuntimeMessageLevel.Warning, warning)
                     self.pointsZ = [-1]
                     good_to_go = False
+
             except urllib2.URLError, e:
                 warning = 'Please check your internet connection.'
                 ghenv.Component.AddRuntimeMessage(gh.GH_RuntimeMessageLevel.Warning, warning)
@@ -302,11 +323,16 @@ class GeoLib( object ):
             warning = 'Your request is too big. Change image resolution or make smaller tiles.'
             ghenv.Component.AddRuntimeMessage(gh.GH_RuntimeMessageLevel.Warning, warning)
             return -1
-
-        urlPart1 = 'https://maps.googleapis.com/maps/api/staticmap?'
-        urlPart2 = "center={0},%20{1}&zoom={2}&size={3}x{4}&maptype={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&key=' + APIKEY_
-
+        
+        if (source_ == 0):
+            urlPart1 = 'https://maps.googleapis.com/maps/api/staticmap?'
+            urlPart2 = "center={0},%20{1}&zoom={2}&size={3}x{4}&maptype={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&key=' + APIKEY_
+        else:
+            urlPart1 = 'https://www.mapquestapi.com/staticmap/v5/map?'
+            urlPart2 = "center={0},{1}&zoom={2}&size={3},{4}&type={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&key=' + APIKEY_
+            
         goog_url = urlPart1 + urlPart2
+        print(goog_url)
 
         return goog_url
 
@@ -339,7 +365,7 @@ class Terrain3D( object ):
 
 def main (  ):
     
-    mapsType = {'0':'satellite', '1':'roadmap', '2':'terrain', '3':'hybrid'}
+    mapsType = {'0':'satellite', '1':'roadmap', '2':'terrain', '3':'hybrid', '4':'map', '5':'hyb', '6':'sat', '7':'light', '8':'dark'}
     
     if folder_:
         folder = folder_
@@ -355,8 +381,10 @@ def main (  ):
         texture = texture_
     else:
         texture = False
-    if mapType_ == None:
+    if mapType_ == None and source_ == 0:
         mapType = mapsType['0']
+    elif mapType_ == None:
+        mapType = mapsType['6']
     else: mapType = mapsType[mapType_]
     if _imgResolution_ == None:
         imgResolution = 18
