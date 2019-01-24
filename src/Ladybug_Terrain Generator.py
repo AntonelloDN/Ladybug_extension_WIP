@@ -4,7 +4,7 @@
 # 
 # This file is part of Ladybug.
 # 
-# Copyright (c) 2013-2018, Antonello Di Nunzio <antonellodinunzio@gmail.com>, Mathias Sonderskov Nielsen (mapquest API idea)
+# Copyright (c) 2013-2019, Antonello Di Nunzio <antonellodinunzio@gmail.com>, Mathias Sonderskov Nielsen (mapquest API idea)
 # Ladybug is free software; you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published 
 # by the Free Software Foundation; either version 3 of the License, 
@@ -22,8 +22,21 @@
 
 
 """
-This component uses Google Maps API or mapquest API to generate terrain models. It works with Rhino 6.
+This component uses: Google Maps API, MapQuest API, JawgMaps API to generate terrain models. It works with Rhino 6.
 -
+STEP 1: Get your API Key
+Register to:
+    a. https://developers.google.com/       (Google API)
+    b. https://developer.mapquest.com/      (MapQuest API)
+    c. https://www.jawg.io/en/              (JawgMaps API)
+-
+STEP 2: Follow the istruction of every webpage.
+Google require you create a project and select the API you want to use in your project (Elevation and Static Maps).
+-
+STEP 3: Use the dashoboard of the website above to monitor the quotes you use.
+Note that each surface is a request, for example if you use a surface made by sub-surfaces 6x6, this will be 36 requests.
+-
+### Details for Google API:
 This component requires an internet connection and if you use Google API you need an API key from Google.
 "Activate the API and get an API key.
 To use the Elevation API, you must first activate the API in the Google Cloud Platform Console and obtain the proper authentication credentials. You need to provide an API key in each request (or a client ID if you have a Premium Plan).
@@ -33,27 +46,23 @@ Click the button below to flow through a process where you will:
     3.Get an API key"
 ref: https://developers.google.com/maps/documentation/elevation/start
 -
+### Details for MapQuest API:
 If you use mapquest API you need an API key.
 Go to this website to obtain an API key of mapquest: https://developer.mapquest.com/
 _______________________________________________________________________________________________
-IMPORTANT!
-"New Pay-As-You-Go Pricing
-Effective July 16, 2018
-How billing works under the new pay-as-you-go model=
-    1.The Google Maps Platform APIs are billed by SKU.
-    2.Usage is tracked for each Product SKU, and an API may have more than one Product SKU.
-    3.Cost is calculated by: SKU Usage x Price per each use.
-    4.For each billing account, for qualifying Google Maps Platform SKUs, a $200 USD Google Maps Platform credit is available each month, and automatically applied to the qualifying SKUs."
-ref: https://developers.google.com/maps/documentation/elevation/usage-and-billing
--
 Note that each surface is a request, for example if you use a surface made by sub-surfaces 6x6, this will be 36 requests.
 -
-Special thanks goes to Google Maps.
+Special thanks goes to Google Maps, MapQuest and JawgMaps.
 -
-Provided by Ladybug 0.0.66
+Provided by Ladybug 0.0.67
     
     Args:
-        source_: Connect 0 if you want to use Google API otherwise will be used mapquest API.
+        source_: Connect an integer from 0 to 2.
+        0 = Google API (elevation and static map)
+        1 = MapQuest API (elevation and static map)
+        2 = JawgMaps API (only elevation)
+        -
+        Google API and JawgMaps use interpolated method for elevation data.
         APIKEY_: This is necessary for API Google. Connect a panel with your API Key from Google or mapquest. Remember that it is a personal key.
         _location: It accepts two type of inputs.
         a) latitude, longitude and elevation that represent WSG84 coordinates of the base point. You can achieve these type of coordinates from Google Maps or similar.
@@ -241,12 +250,19 @@ class GeoLib( object ):
         
     def elevationAPI(self):
         if (source_ == 0 or source_ == 1):
-            list_coordinate = [str(pt.Y) + ',' + str(pt.X) + "|" for pt in self.points]
+            divideChar = "|"
+            cleanList = 1
+        elif (source_ == 2):
+            divideChar = "%7C"
+            cleanList = 3
         else:
-            list_coordinate = [str(pt.Y) + ',' + str(pt.X) + "," for pt in self.points]
+            divideChar = ","
+            cleanList = 1
+        
+        list_coordinate = [str(pt.Y) + ',' + str(pt.X) + divideChar for pt in self.points]
         
         flat_list_coordinate = ''.join(list_coordinate)
-        flat_list_coordinate = flat_list_coordinate[:len(flat_list_coordinate)-1]
+        flat_list_coordinate = flat_list_coordinate[:len(flat_list_coordinate) - cleanList]
         url_part2 = flat_list_coordinate
         
         if len(url_part2) < 4094:
@@ -257,6 +273,11 @@ class GeoLib( object ):
                         jsonData = json.loads( response.read( ) )
                         print(jsonData)
                         elevations = [ jsonData['results'][i]['elevation'] for i in xrange( len(jsonData['results']) ) ]
+                    elif (source_ == 2):
+                        response = urllib2.urlopen('https://api.jawg.io/elevations?locations=' + url_part2 + '&access-token=' + APIKEY_ )
+                        jsonData = json.loads( response.read( ) )
+                        print(jsonData)
+                        elevations = [ jsonData[i]['elevation'] for i in xrange( len(jsonData) ) ]
                     else:
                         response = urllib2.urlopen('https://open.mapquestapi.com/elevation/v1/profile?shapeFormat=raw&latLngCollection=' + url_part2 + '&key=' + APIKEY_ )
                         jsonData = json.loads( response.read( ) )
@@ -426,7 +447,7 @@ def main (  ):
         tp = Terrain3D( flatListPoints, mappa.numOfTiles, mappa.numDivision, mappa.basePoint, mappa.factor )
         gt = tp.makeSrf( ) if type_ == 1 else tp.makeMesh( )
         
-        if texture:
+        if texture and source_ != 2:
             calculationTiles = mappa.setTiles( mappa.radius )
             for i, tile in enumerate( calculationTiles ):
                 points, centre = mappa.divideSrf( tile )
