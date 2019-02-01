@@ -249,7 +249,7 @@ class GeoLib( object ):
         self.zoom = zoom
         
     def elevationAPI(self):
-        if (source_ == 0 or source_ == 1):
+        if (source_ == 0):
             divideChar = "|"
             cleanList = 1
         elif (source_ == 2):
