@@ -101,6 +101,11 @@ Provided by Ladybug 0.0.67
         6 = MAPQUEST sat
         7 = MAPQUEST light
         8 = MAPQUEST dark
+        9 = jawg-streets
+        10 = jawg-terrain
+        11 = jawg-sunny
+        12 = jawg-dark
+        13 = jawg-light
         folder_: The folder into which you would like to write the image file. This should be a complete file path to the folder.  If no folder is provided, the images will be written to C:/USERNAME/AppData/Roaming/Ladybug/IMG_Google.
         _runIt: Set to "True" to run the component and generate the 3D terrain model.
         texture_: Set to "True" to enable Google Static Maps as well. Keep in mind the daily quota of requests. Default value is False.
@@ -120,9 +125,9 @@ Provided by Ladybug 0.0.67
 
 ghenv.Component.Name = "Ladybug_Terrain Generator"
 ghenv.Component.NickName = 'TerrainGenerator'
-ghenv.Component.Message = 'VER 0.0.66\nMAR_03_2018'
+ghenv.Component.Message = 'VER 0.0.69\nJUL_07_2020'
 ghenv.Component.IconDisplayMode = ghenv.Component.IconDisplayMode.application
-ghenv.Component.Category = "Ladybug"
+ghenv.Component.Category = "LB-Legacy"
 ghenv.Component.SubCategory = "7 | WIP"
 #compatibleLBVersion = VER 0.0.62\nJUN_07_2016
 try: ghenv.Component.AdditionalHelpFromDocStrings = "0"
@@ -279,7 +284,7 @@ class GeoLib( object ):
                         print(jsonData)
                         elevations = [ jsonData[i]['elevation'] for i in xrange( len(jsonData) ) ]
                     else:
-                        response = urllib2.urlopen('https://open.mapquestapi.com/elevation/v1/profile?shapeFormat=raw&latLngCollection=' + url_part2 + '&key=' + APIKEY_ )
+                        response = urllib2.urlopen('http://open.mapquestapi.com/elevation/v1/profile?shapeFormat=raw&latLngCollection=' + url_part2 + '&key=' + APIKEY_ )
                         jsonData = json.loads( response.read( ) )
                         print(jsonData)
                         elevations = [ jsonData['elevationProfile'][i]['height'] for i in xrange( len(jsonData['elevationProfile']) ) ]
@@ -348,11 +353,15 @@ class GeoLib( object ):
         if (source_ == 0):
             urlPart1 = 'https://maps.googleapis.com/maps/api/staticmap?'
             urlPart2 = "center={0},%20{1}&zoom={2}&size={3}x{4}&maptype={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&key=' + APIKEY_
-        else:
+        elif (source_ == 1):
             urlPart1 = 'https://www.mapquestapi.com/staticmap/v5/map?'
             urlPart2 = "center={0},{1}&zoom={2}&size={3},{4}&type={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&key=' + APIKEY_
+        else:
+            urlPart1 = 'https://api.jawg.io/static?'
+            urlPart2 = "center={0},{1}&zoom={2}&size={3}x{4}&layer={5}".format(str(center.Y), str(center.X), str(self.zoom), str(int(dx)), str(int(dy)), str(mapType)) + '&format=png&access-token=' + APIKEY_
             
         goog_url = urlPart1 + urlPart2
+        
         print(goog_url)
 
         return goog_url
@@ -386,7 +395,20 @@ class Terrain3D( object ):
 
 def main (  ):
     
-    mapsType = {'0':'satellite', '1':'roadmap', '2':'terrain', '3':'hybrid', '4':'map', '5':'hyb', '6':'sat', '7':'light', '8':'dark'}
+    mapsType = {'0': 'satellite', 
+                '1': 'roadmap', 
+                '2': 'terrain', 
+                '3': 'hybrid', 
+                '4': 'map', 
+                '5': 'hyb', 
+                '6': 'sat', 
+                '7': 'light', 
+                '8': 'dark',
+                '9': 'jawg-streets',
+                '10': 'jawg-terrain',
+                '11': 'jawg-sunny',
+                '12': 'jawg-dark',
+                '13': 'jawg-light'}
     
     if folder_:
         folder = folder_
@@ -404,8 +426,10 @@ def main (  ):
         texture = False
     if mapType_ == None and source_ == 0:
         mapType = mapsType['0']
-    elif mapType_ == None:
+    elif mapType_ == None and source_ == 1:
         mapType = mapsType['6']
+    elif mapType_ == None and source_ == 2:
+        mapType = mapsType['11']
     else: mapType = mapsType[mapType_]
     if _imgResolution_ == None:
         imgResolution = 18
@@ -447,7 +471,7 @@ def main (  ):
         tp = Terrain3D( flatListPoints, mappa.numOfTiles, mappa.numDivision, mappa.basePoint, mappa.factor )
         gt = tp.makeSrf( ) if type_ == 1 else tp.makeMesh( )
         
-        if texture and source_ != 2:
+        if texture:
             calculationTiles = mappa.setTiles( mappa.radius )
             for i, tile in enumerate( calculationTiles ):
                 points, centre = mappa.divideSrf( tile )
@@ -460,6 +484,7 @@ def main (  ):
                     client = System.Net.WebClient()
                     written_file = client.DownloadFile( goog_url, name )
                     imagePath.Add( name, path )
+                    time.sleep( sleepFactor )
                 except:
                     pass
                     print("Something went wrong during the request of images. Please, try again.")
